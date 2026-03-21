@@ -26,23 +26,21 @@ namespace Sentinel.Application.Services
             {
                 // S-SDLC: Dosya içeriği boş mu kontrolü
                 if (string.IsNullOrWhiteSpace(fileContent))
-                    return Result<Guid>.Failure("Dosya içeriği boş olamaz.");
+                    return Result<Guid>.Failure("Geçersiz dosya formatı. Lütfen project.assets.json yükleyin.");
 
                 var module = await _unitOfWork.Modules.GetByIdAsync(moduleId);
+                if (module == null) return Result<Guid>.Failure("Modül bulunamadı.");
                 var parser = _parsers.FirstOrDefault(p => p.Ecosystem == module.Ecosystem);
+                if (parser == null) return Result<Guid>.Failure($"{module.Ecosystem} için uygur parser bulunamadı.");
 
-                if (parser == null) throw new Exception("Unsupported ecosystem!");
-
-                // 1. Yeni bir Scan kaydı oluştur
                 var scan = new Scan
                 {
                     ModuleId = moduleId,
                     ScanDate = DateTime.UtcNow,
-                    SbomOutput = "{}" // Başlangıçta boş, sonra CycloneDX formatına dolacak
+                    SbomOutput = "{}" // will be CycloneDX format.
                 };
                 await _unitOfWork.Scans.AddAsync(scan);
 
-                // 2. Dosyayı parse et ve bileşenleri oluştur
                 List<Component> components = await parser.ParseAsync(fileContent, scan.Id);
 
                 foreach (var comp in components)
@@ -50,7 +48,6 @@ namespace Sentinel.Application.Services
                     await _unitOfWork.Components.AddAsync(comp);
                 }
 
-                // 3. Değişiklikleri tek bir transaction olarak kaydet (Unit of Work)
                 await _unitOfWork.SaveChangesAsync();
 
                 return Result<Guid>.Success(scan.Id, "Tarama başarıyla tamamlandı.");

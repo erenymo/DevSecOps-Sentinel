@@ -11,13 +11,15 @@ namespace Sentinel.Application.Parsers
 {
     public class NuGetParserStrategy : IParserStrategy
     {
+        // NUGET roject.assets.json dosyası yeterlidir çünkü bu dosya tüm bağımlılık ağacını içerir.
+        // Bunun yanında .csproj dosyası da okunabilir ancak bu dosya sadece doğrudan bağımlılıkları içerir, transitive bağımlılıkları içermez.
         public string Ecosystem => "NuGet";
 
         public async Task<List<Component>> ParseAsync(string fileContent, Guid scanId)
         {
             if (!fileContent.Contains("\"libraries\"") || !fileContent.Contains("\"targets\""))
             {
-                throw new ArgumentException("Yüklenen dosya geçerli bir project.assets.json değil. Lütfen önce 'dotnet restore' komutunu çalıştırın.");
+                throw new ArgumentException("Yüklenen dosya geçerli bir project.assets.json değil. Lütfen geçerli bir dosya yükleyin.");
             }
 
             var components = new List<Component>();
