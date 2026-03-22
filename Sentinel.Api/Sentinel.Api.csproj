@@ -20,8 +20,4 @@
     <ProjectReference Include="..\Sentinel.Application\Sentinel.Application.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Middleware\" />
-  </ItemGroup>
-
 </Project>

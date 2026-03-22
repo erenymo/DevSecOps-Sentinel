@@ -1,6 +1,6 @@
 ﻿using Sentinel.Application.Abstractions;
+using Sentinel.Application.DTOs.Responses;
 using Sentinel.Domain.Entities;
-using Sentinel.Domain.Responses;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,18 +20,17 @@ namespace Sentinel.Application.Services
             _parsers = parsers;
         }
 
-        public async Task<Result<Guid>> RunScanAsync(Guid moduleId, string fileName, string fileContent)
+        public async Task<BaseResponse<Guid>> RunScanAsync(Guid moduleId, string fileName, string fileContent)
         {
             try
             {
-                // S-SDLC: Dosya içeriği boş mu kontrolü
                 if (string.IsNullOrWhiteSpace(fileContent))
-                    return Result<Guid>.Failure("Geçersiz dosya formatı. Lütfen project.assets.json yükleyin.");
+                    return BaseResponse<Guid>.Fail("Geçersiz dosya formatı. Lütfen project.assets.json yükleyin.");
 
                 var module = await _unitOfWork.Modules.GetByIdAsync(moduleId);
-                if (module == null) return Result<Guid>.Failure("Modül bulunamadı.");
+                if (module == null) return BaseResponse<Guid>.Fail("Modül bulunamadı.");
                 var parser = _parsers.FirstOrDefault(p => p.Ecosystem == module.Ecosystem);
-                if (parser == null) return Result<Guid>.Failure($"{module.Ecosystem} için uygur parser bulunamadı.");
+                if (parser == null) return BaseResponse<Guid>.Fail($"{module.Ecosystem} için uygur parser bulunamadı.");
 
                 var scan = new Scan
                 {
@@ -50,10 +49,10 @@ namespace Sentinel.Application.Services
 
                 await _unitOfWork.SaveChangesAsync();
 
-                return Result<Guid>.Success(scan.Id, "Tarama başarıyla tamamlandı.");
+                return BaseResponse<Guid>.Ok(scan.Id, "Tarama başarıyla tamamlandı.");
             } catch(Exception ex)
             {
-                return Result<Guid>.Failure($"Tarama sırasında hata oluştu: {ex.Message}");
+                return BaseResponse<Guid>.Fail($"Tarama sırasında hata oluştu: {ex.Message}");
             }
             
         }

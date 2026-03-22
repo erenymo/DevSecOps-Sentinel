@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Sentinel.Application.Abstractions;
 using Sentinel.Application.Abstractions.Validation;
+using Sentinel.Application.DTOs.Responses;
 
 namespace Sentinel.Api.Controllers
 {
@@ -33,7 +34,7 @@ namespace Sentinel.Api.Controllers
             var validationResult = await _fileValidationService.ValidateFileAsync(file, ct);
 
             if (!validationResult.IsSuccess)
-                return BadRequest(new { Error = validationResult.ErrorMessage });
+                return BadRequest(BaseResponse<object>.Fail(validationResult.ErrorMessage ?? "Validation failed."));
 
             // --- 2. VALIDATOR BUL ---
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -43,7 +44,7 @@ namespace Sentinel.Api.Controllers
                     .Contains(extension, StringComparer.OrdinalIgnoreCase));
 
             if (validator is null)
-                return BadRequest("No validator found for file type.");
+                return BadRequest(BaseResponse<object>.Fail($"No validator found for extension: {extension}"));
 
             // 🔥 3. ECOSYSTEM (string)
             var ecosystem = validator.Ecosystem;
@@ -53,7 +54,7 @@ namespace Sentinel.Api.Controllers
                 .FirstOrDefault(p => p.Ecosystem.Equals(ecosystem, StringComparison.OrdinalIgnoreCase));
 
             if (parser is null)
-                return StatusCode(500, $"Parser not found for ecosystem: {ecosystem}");
+                return StatusCode(500, BaseResponse<object>.Fail($"Parser implementation missing for ecosystem: {ecosystem}"));
 
             // --- 5. FILE OKUMA ---
             using var stream = file.OpenReadStream();
@@ -81,7 +82,7 @@ namespace Sentinel.Api.Controllers
                 })
             };
 
-            return Ok(result);
+            return Ok(BaseResponse<object>.Ok(result, "SBOM analysis completed successfully."));
         }
     }
 }

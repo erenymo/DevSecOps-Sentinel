@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sentinel.Api.Middleware;
 using Sentinel.Application;
 using Sentinel.Application.Abstractions;
 using Sentinel.Application.Parsers;
@@ -29,6 +30,8 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 
 var app = builder.Build();
+
+app.UseGlobalExceptionMiddleware();
 
 app.UseCors("AllowAll");
 
