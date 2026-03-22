@@ -1,4 +1,4 @@
-﻿using Sentinel.Domain.Entities;
+using Sentinel.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +10,6 @@ namespace Sentinel.Application.Abstractions
     public interface IParserStrategy
     {
         string Ecosystem {  get; }
-        Task<List<Component>> ParseAsync(string fileContent, Guid scanId);
+        Task<List<Component>> ParseAsync(Stream stream, string extension, Guid scanId);
     }
 }

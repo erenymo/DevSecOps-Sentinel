@@ -1,0 +1,4 @@
+﻿  Geri y├╝klenecek projeler belirleniyor...
+  Geri y├╝kleme i├ğin t├╝m projeler g├╝ncel.
+  Sentinel.Domain -> C:\Users\PC\Desktop\DevSecOps Source\dev\Backend\Sentinel.Core\Sentinel.Domain\bin\Debug\net9.0\Sentinel.Domain.dll
+C:\Users\PC\Desktop\DevSecOps Source\dev\Backend\Sentinel.Core\Sentinel.Application\Services\ScannerService.cs(43,59): error CS7036: 'IParserStrategy.ParseAsync(Stream, string, Guid)'nin gerekli 'scanId' parametresine kar┼ş─▒l─▒k gelen herhangi bir arg├╝man yok [C:\Users\PC\Desktop\DevSecOps Source\dev\Backend\Sentinel.Core\Sentinel.Application\Sentinel.Application.csproj]

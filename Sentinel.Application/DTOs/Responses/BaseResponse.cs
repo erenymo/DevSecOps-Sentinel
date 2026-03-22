@@ -19,8 +19,11 @@ namespace Sentinel.Application.DTOs.Responses
 
         public static BaseResponse<T> Fail(string error)
             => new() { Success = false, Errors = new List<string> { error } };
-
+        public static BaseResponse<T> Fail(string error, string message = "Failed")
+            => new() { Success = false, Errors = new List<string> { error }, Message = message };
         public static BaseResponse<T> Fail(List<string> errors)
             => new() { Success = false, Errors = errors };
+        public static BaseResponse<T> Fail(List<string> errors, string message = "Failed")
+            => new() { Success = false, Errors = errors, Message = message };
     }
 }

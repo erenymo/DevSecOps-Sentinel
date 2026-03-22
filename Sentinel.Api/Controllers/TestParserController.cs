@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Sentinel.Application.Abstractions;
 using Sentinel.Application.Abstractions.Validation;
@@ -58,11 +58,9 @@ namespace Sentinel.Api.Controllers
 
             // --- 5. FILE OKUMA ---
             using var stream = file.OpenReadStream();
-            using var reader = new StreamReader(stream);
-            var content = await reader.ReadToEndAsync();
 
             // --- 6. PARSE ---
-            var components = await parser.ParseAsync(content, Guid.NewGuid());
+            var components = await parser.ParseAsync(stream, extension, Guid.NewGuid());
 
             // --- 7. RESPONSE ---
             var result = new

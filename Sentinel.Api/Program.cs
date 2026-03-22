@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
 using Sentinel.Api.Middleware;
 using Sentinel.Application;
 using Sentinel.Application.Abstractions;
@@ -6,17 +7,33 @@ using Sentinel.Application.Parsers;
 using Sentinel.Application.Services;
 using Sentinel.Infrastructure;
 using Sentinel.Infrastructure.Persistence.Context;
+using Sentinel.Application.DTOs.Responses;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddControllers();
-// 1. CORS Politikasýný Tanýmla
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(e => e.Value?.Errors.Count > 0)
+                .SelectMany(x => x.Value!.Errors)
+                .Select(x => x.ErrorMessage)
+                .ToList();
+
+            var response = BaseResponse<object>.Fail(errors, "Validation Failed");
+
+            return new BadRequestObjectResult(response);
+        };
+    });
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()   
-              .AllowAnyMethod()   
-              .AllowAnyHeader(); 
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
     });
 });
 

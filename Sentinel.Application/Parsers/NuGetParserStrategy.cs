@@ -16,27 +16,27 @@ namespace Sentinel.Application.Parsers
         // Bunun yanında .csproj dosyası da okunabilir ancak bu dosya sadece doğrudan bağımlılıkları içerir, transitive bağımlılıkları içermez.
         public string Ecosystem => "NuGet";
 
-        public async Task<List<Component>> ParseAsync(string fileContent, Guid scanId)
+        public async Task<List<Component>> ParseAsync(Stream stream, string extension, Guid scanId)
         {
-            fileContent = fileContent.Trim();
-
-            // 1. Dosya tipini belirle
-            if (fileContent.StartsWith("{"))
+            // 1. Ekstansiyona göre formatı belirle
+            if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
             {
-                return await ParseProjectAssetsJsonAsync(fileContent, scanId);
+                return await ParseProjectAssetsJsonAsync(stream, scanId);
             }
-            else if (fileContent.StartsWith("<"))
+            else if (extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
             {
-                return await ParseCsProjAsync(fileContent, scanId);
+                return await ParseCsProjAsync(stream, scanId);
             }
 
             throw new ArgumentException("Desteklenmeyen dosya formatı. Lütfen .csproj veya project.assets.json yükleyin.");
         }
 
-        private async Task<List<Component>> ParseCsProjAsync(string fileContent, Guid scanId)
+        private async Task<List<Component>> ParseCsProjAsync(Stream stream, Guid scanId)
         {
             var components = new List<Component>();
-            var doc = XDocument.Parse(fileContent);
+            var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, Async = true };
+            using var reader = System.Xml.XmlReader.Create(stream, settings);
+            var doc = await XDocument.LoadAsync(reader, LoadOptions.None, CancellationToken.None);
 
             // Proje adını Root elementinden veya dosya adından alabiliriz. 
             // Genelde .csproj içinde isim yazmaz, bu yüzden 'Project' diyelim.
@@ -70,13 +70,8 @@ namespace Sentinel.Application.Parsers
             return components;
         }
 
-        private async Task<List<Component>> ParseProjectAssetsJsonAsync(string fileContent, Guid scanId)
+        private async Task<List<Component>> ParseProjectAssetsJsonAsync(Stream stream, Guid scanId)
         {
-            if (!fileContent.Contains("\"libraries\"") || !fileContent.Contains("\"targets\""))
-            {
-                throw new ArgumentException("Yüklenen dosya geçerli bir project.assets.json değil.");
-            }
-
             var components = new List<Component>();
             var directDependencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var internalProjectNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -84,8 +79,13 @@ namespace Sentinel.Application.Parsers
             // Hangi paketi kimin getirdiğini tutan harita (Key: Alt Paket, Value: Üst Paket)
             var parentMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            using var doc = JsonDocument.Parse(fileContent);
+            using var doc = await JsonDocument.ParseAsync(stream);
             var root = doc.RootElement;
+
+            if (!root.TryGetProperty("libraries", out _) || !root.TryGetProperty("targets", out _))
+            {
+                throw new ArgumentException("Yüklenen dosya geçerli bir project.assets.json değil.");
+            }
 
             string rootProjectName = "Root";
             if (root.TryGetProperty("project", out var projectElement) &&

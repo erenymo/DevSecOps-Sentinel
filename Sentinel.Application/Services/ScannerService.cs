@@ -1,4 +1,4 @@
-﻿using Sentinel.Application.Abstractions;
+using Sentinel.Application.Abstractions;
 using Sentinel.Application.DTOs.Responses;
 using Sentinel.Domain.Entities;
 using System;
@@ -25,12 +25,12 @@ namespace Sentinel.Application.Services
             try
             {
                 if (string.IsNullOrWhiteSpace(fileContent))
-                    return BaseResponse<Guid>.Fail("Geçersiz dosya formatı. Lütfen project.assets.json yükleyin.");
+                    return BaseResponse<Guid>.Fail("Geçersiz dosya formatı. Lütfen project.assets.json yükleyin.", "Unsupported File Format");
 
                 var module = await _unitOfWork.Modules.GetByIdAsync(moduleId);
-                if (module == null) return BaseResponse<Guid>.Fail("Modül bulunamadı.");
+                if (module == null) return BaseResponse<Guid>.Fail("Modül bulunamadı.", "Module Not Found");
                 var parser = _parsers.FirstOrDefault(p => p.Ecosystem == module.Ecosystem);
-                if (parser == null) return BaseResponse<Guid>.Fail($"{module.Ecosystem} için uygur parser bulunamadı.");
+                if (parser == null) return BaseResponse<Guid>.Fail($"{module.Ecosystem} için uygur parser bulunamadı.", "Unsupported Ecosystem");
 
                 var scan = new Scan
                 {
@@ -40,7 +40,9 @@ namespace Sentinel.Application.Services
                 };
                 await _unitOfWork.Scans.AddAsync(scan);
 
-                List<Component> components = await parser.ParseAsync(fileContent, scan.Id);
+                var extension = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+                using var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(fileContent));
+                List<Component> components = await parser.ParseAsync(stream, extension, scan.Id);
 
                 foreach (var comp in components)
                 {
@@ -50,11 +52,12 @@ namespace Sentinel.Application.Services
                 await _unitOfWork.SaveChangesAsync();
 
                 return BaseResponse<Guid>.Ok(scan.Id, "Tarama başarıyla tamamlandı.");
-            } catch(Exception ex)
+            }
+            catch (Exception ex)
             {
                 return BaseResponse<Guid>.Fail($"Tarama sırasında hata oluştu: {ex.Message}");
             }
-            
+
         }
     }
 }
