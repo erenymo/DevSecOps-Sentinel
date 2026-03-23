@@ -50,7 +50,7 @@ namespace Sentinel.Application.Services
                     // Birden fazla lisans ismini liste olarak alıyoruz
                     c.ComponentLicenses != null && c.ComponentLicenses.Any()
                         ? c.ComponentLicenses.Select(cl => cl.License.Name).ToList()
-                        : new List<string> { "Unknown" }
+                        : new List<string>()
                 ));
 
                 return BaseResponse<IEnumerable<ComponentDto>>.Ok(dtos.ToList(), "Bileşenler başarıyla getirildi.");
@@ -62,3 +62,4 @@ namespace Sentinel.Application.Services
         }
     }
 }
+
