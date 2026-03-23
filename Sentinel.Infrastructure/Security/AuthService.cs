@@ -35,11 +35,11 @@ namespace Sentinel.Infrastructure.Security
         {
             var user = await _userManager.FindByEmailAsync(request.Email);
             if (user == null)
-                return BaseResponse<TokenResponse>.Fail("Invalid email or password.");
+                return BaseResponse<TokenResponse>.Fail("Invalid email or password.", "Invalid email or password.");
 
             var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, false);
             if (!result.Succeeded)
-                return BaseResponse<TokenResponse>.Fail("Invalid email or password.");
+                return BaseResponse<TokenResponse>.Fail("Invalid email or password.", "Invalid email or password.");
 
             var roles = await _userManager.GetRolesAsync(user);
             var token = _jwtProvider.GenerateToken(user, roles);
@@ -56,7 +56,7 @@ namespace Sentinel.Infrastructure.Security
         {
             var exists = await _userManager.FindByEmailAsync(request.Email);
             if (exists != null)
-                return BaseResponse<Guid>.Fail("Email is already in use.");
+                return BaseResponse<Guid>.Fail("Email is already in use.", "Email is already in use.");
 
             var user = new AppUser
             {
@@ -88,7 +88,7 @@ namespace Sentinel.Infrastructure.Security
             var user = _userManager.Users.FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
 
             if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
-                return BaseResponse<TokenResponse>.Fail("Invalid or expired refresh token.");
+                return BaseResponse<TokenResponse>.Fail("Invalid or expired refresh token.", "Invalid or expired refresh token.");
 
             var roles = await _userManager.GetRolesAsync(user);
             var newAccessToken = _jwtProvider.GenerateToken(user, roles);

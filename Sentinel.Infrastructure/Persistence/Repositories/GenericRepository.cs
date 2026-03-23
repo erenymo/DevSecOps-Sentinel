@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Sentinel.Application.Abstractions;
 using Sentinel.Infrastructure.Persistence.Context;
 using System;
@@ -25,6 +25,8 @@ namespace Sentinel.Infrastructure.Persistence.Repositories
         public async Task<T?> GetByIdAsync(Guid id) => await _dbSet.FindAsync(id);
 
         public async Task<IEnumerable<T>> GetAllAsync() => await _dbSet.ToListAsync();
+
+        public async Task<IEnumerable<T>> GetAllAsync(Expression<Func<T, bool>> predicate) => await _dbSet.Where(predicate).ToListAsync();
 
         public IQueryable<T> Where(Expression<Func<T, bool>> predicate) => _dbSet.Where(predicate);
 
