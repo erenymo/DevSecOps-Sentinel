@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Sentinel.Domain.Entities;
 using System;
@@ -21,22 +21,19 @@ namespace Sentinel.Infrastructure.Persistence.Context
         public DbSet<Vulnerability> Vulnerabilities => Set<Vulnerability>();
         public DbSet<VexStatement> VexStatements => Set<VexStatement>();
 
+        public DbSet<PackageLicense> PackageLicenses => Set<PackageLicense>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<ComponentLicense>()
-            .HasKey(cl => new { cl.ComponentId, cl.LicenseId }); // Composite Key
+            modelBuilder.Entity<PackageLicense>()
+            .HasKey(pl => new { pl.Purl, pl.LicenseId }); // Composite Key
 
-            modelBuilder.Entity<ComponentLicense>()
-                .HasOne(cl => cl.Component)
-                .WithMany(c => c.ComponentLicenses)
-                .HasForeignKey(cl => cl.ComponentId);
-
-            modelBuilder.Entity<ComponentLicense>()
-                .HasOne(cl => cl.License)
-                .WithMany(l => l.ComponentLicenses)
-                .HasForeignKey(cl => cl.LicenseId);
+            modelBuilder.Entity<PackageLicense>()
+                .HasOne(pl => pl.License)
+                .WithMany(l => l.PackageLicenses)
+                .HasForeignKey(pl => pl.LicenseId);
 
             // Workspace -> AppUser
             modelBuilder.Entity<Workspace>()

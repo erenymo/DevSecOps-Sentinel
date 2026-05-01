@@ -71,34 +71,43 @@ namespace Sentinel.Infrastructure.DepsDev
 
             // 1. Scan'deki tüm bileşenleri çek
             var components = await unitOfWork.Components.GetAllAsync(
-                c => c.ScanId == scanId,
-                includeProperties: "ComponentLicenses");
+                c => c.ScanId == scanId);
 
             var componentList = components.ToList();
 
             _logger.LogInformation("ScanId={ScanId}: {Count} bileşen işlenecek.", scanId, componentList.Count);
 
-            // 2. Sadece PURL'ü olan ve henüz lisansı olmayan bileşenleri işle
-            var toProcess = componentList
-                .Where(c => !string.IsNullOrWhiteSpace(c.Purl)
-                         && (c.ComponentLicenses == null || !c.ComponentLicenses.Any()))
+            // 2. Sadece PURL'ü olanları al
+            var purls = componentList
+                .Where(c => !string.IsNullOrWhiteSpace(c.Purl))
+                .Select(c => c.Purl!)
+                .Distinct()
                 .ToList();
 
-            _logger.LogInformation("ScanId={ScanId}: {Count} bileşen lisans zenginleştirmesi bekliyor.", scanId, toProcess.Count);
+            // 3. Veritabanında bu PURL'lere ait lisanslar var mı kontrol et
+            var existingPackageLicenses = await unitOfWork.PackageLicenses.GetAllAsync(
+                pl => purls.Contains(pl.Purl));
 
-            // 3. Mevcut lisansları DB'den çekip in-memory cache'e al (deduplication)
+            var processedPurls = existingPackageLicenses.Select(pl => pl.Purl).Distinct().ToHashSet();
+
+            // Henüz lisansı olmayan PURL'leri bul
+            var toProcessPurls = purls.Where(p => !processedPurls.Contains(p)).ToList();
+
+            _logger.LogInformation("ScanId={ScanId}: {Count} farklı PURL lisans zenginleştirmesi bekliyor.", scanId, toProcessPurls.Count);
+
+            // 4. Mevcut lisansları DB'den çekip in-memory cache'e al (deduplication)
             var existingLicenses = await unitOfWork.Licenses.GetAllAsync();
             var licenseCache = new System.Collections.Concurrent.ConcurrentDictionary<string, License>(
                 existingLicenses.ToDictionary(l => l.Name, l => l, StringComparer.OrdinalIgnoreCase));
 
-            // 4. Semaphore ile kontrollü paralel işlem
+            // 5. Semaphore ile kontrollü paralel işlem
             using var semaphore = new SemaphoreSlim(MaxDegreeOfParallelism);
-            var tasks = toProcess.Select(async component =>
+            var tasks = toProcessPurls.Select(async purl =>
             {
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    await EnrichComponentAsync(component, unitOfWork, depsDevClient, licenseCache, cancellationToken);
+                    await EnrichPurlAsync(purl, unitOfWork, depsDevClient, licenseCache, cancellationToken);
                     await Task.Delay(RequestDelay, cancellationToken);
                 }
                 finally
@@ -109,12 +118,12 @@ namespace Sentinel.Infrastructure.DepsDev
 
             await Task.WhenAll(tasks);
 
-            // 5. Tüm değişiklikleri tek seferde kaydet
+            // 6. Tüm değişiklikleri tek seferde kaydet
             await unitOfWork.SaveChangesAsync();
         }
 
-        private async Task EnrichComponentAsync(
-            Component component,
+        private async Task EnrichPurlAsync(
+            string purl,
             IUnitOfWork unitOfWork,
             IDepsDevClient depsDevClient,
             System.Collections.Concurrent.ConcurrentDictionary<string, License> licenseCache,
@@ -122,11 +131,11 @@ namespace Sentinel.Infrastructure.DepsDev
         {
             try
             {
-                var licenseNames = await depsDevClient.GetLicensesAsync(component.Purl!, cancellationToken);
+                var licenseNames = await depsDevClient.GetLicensesAsync(purl, cancellationToken);
 
                 if (!licenseNames.Any())
                 {
-                    _logger.LogDebug("Lisans bulunamadı: {Name}@{Version}", component.Name, component.Version);
+                    _logger.LogDebug("Lisans bulunamadı: {Purl}", purl);
                     return;
                 }
 
@@ -145,22 +154,21 @@ namespace Sentinel.Infrastructure.DepsDev
                         return newLicense;
                     });
 
-                    // ComponentLicense ilişkisini oluştur
-                    var componentLicense = new ComponentLicense
+                    // PackageLicense ilişkisini oluştur
+                    var packageLicense = new PackageLicense
                     {
-                        ComponentId = component.Id,
+                        Purl = purl,
                         LicenseId = license.Id
                     };
-                    await unitOfWork.ComponentLicenses.AddAsync(componentLicense);
+                    await unitOfWork.PackageLicenses.AddAsync(packageLicense);
                 }
 
-                _logger.LogDebug("Lisans eşleştirildi: {Name}@{Version} → [{Licenses}]",
-                    component.Name, component.Version, string.Join(", ", licenseNames));
+                _logger.LogDebug("Lisans eşleştirildi: {Purl} → [{Licenses}]",
+                    purl, string.Join(", ", licenseNames));
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Bileşen lisans zenginleştirme hatası: {Name}@{Version}",
-                    component.Name, component.Version);
+                _logger.LogWarning(ex, "PURL lisans zenginleştirme hatası: {Purl}", purl);
             }
         }
 

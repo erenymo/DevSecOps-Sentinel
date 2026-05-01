@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -13,6 +13,6 @@ namespace Sentinel.Domain.Entities
         public string? Type { get; set; } 
         public string RiskLevel { get; set; } = "Low";
 
-        public virtual ICollection<ComponentLicense> ComponentLicenses { get; set; } = new List<ComponentLicense>();
+        public virtual ICollection<PackageLicense> PackageLicenses { get; set; } = new List<PackageLicense>();
     }
 }

@@ -30,16 +30,30 @@ namespace Sentinel.Application.Services
                     return BaseResponse<IEnumerable<ComponentDto>>.Ok(new List<ComponentDto>(), "Bu modül için henüz tarama yapılmamış.");
                 }
 
-                // 2. Bileşenleri ilişkileriyle (ComponentLicenses -> License) birlikte çek
-                // Not: UnitOfWork içinde Include desteği olduğunu varsayıyorum. 
-                // Yoksa repository'ni bu ilişkileri içerecek (Eager Loading) şekilde güncellemelisin.
+                // 2. Bileşenleri çek
                 var components = await _unitOfWork.Components.GetAllAsync(
-                    c => c.ScanId == latestScan.Id,
-                    includeProperties: "ComponentLicenses.License" // İlişkili veriyi dahil ediyoruz
+                    c => c.ScanId == latestScan.Id
                 );
 
-                // 3. Yeni ComponentDto yapısına göre (Many-to-Many uyumlu) haritalama yap
-                var dtos = components.Select(c => new ComponentDto(
+                var componentList = components.ToList();
+
+                var purls = componentList
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Purl))
+                    .Select(c => c.Purl!)
+                    .Distinct()
+                    .ToList();
+
+                var packageLicenses = await _unitOfWork.PackageLicenses.GetAllAsync(
+                    pl => purls.Contains(pl.Purl),
+                    includeProperties: "License"
+                );
+
+                var licenseMap = packageLicenses
+                    .GroupBy(pl => pl.Purl)
+                    .ToDictionary(g => g.Key, g => g.Select(pl => pl.License.Name).ToList());
+
+                // 3. Yeni ComponentDto yapısına göre haritalama yap
+                var dtos = componentList.Select(c => new ComponentDto(
                     c.Id,
                     c.Name,
                     c.Version,
@@ -47,9 +61,9 @@ namespace Sentinel.Application.Services
                     c.IsTransitive,
                     c.ParentName,
                     c.DependencyPath,
-                    // Birden fazla lisans ismini liste olarak alıyoruz
-                    c.ComponentLicenses != null && c.ComponentLicenses.Any()
-                        ? c.ComponentLicenses.Select(cl => cl.License.Name).ToList()
+                    // PURL üzerinden lisans isimlerini alıyoruz
+                    !string.IsNullOrWhiteSpace(c.Purl) && licenseMap.TryGetValue(c.Purl, out var licenses)
+                        ? licenses
                         : new List<string>()
                 ));
 

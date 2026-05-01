@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,11 +6,10 @@ using System.Threading.Tasks;
 
 namespace Sentinel.Domain.Entities
 {
-    public class ComponentLicense : BaseEntity
+    public class PackageLicense : BaseEntity
     {
-        public Guid ComponentId { get; set; }
+        public string Purl { get; set; } = string.Empty;
         public Guid LicenseId { get; set; }
-        public virtual Component Component { get; set; } = null!;
         public virtual License License { get; set; } = null!;
     }
 }

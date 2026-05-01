@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,6 +19,5 @@ namespace Sentinel.Domain.Entities
         public string? DependencyPath { get; set; }
 
         public virtual ICollection<VexStatement> VexStatements { get; set; } = new List<VexStatement>();
-        public virtual ICollection<ComponentLicense> ComponentLicenses { get; set; } = new List<ComponentLicense>();
     }
 }

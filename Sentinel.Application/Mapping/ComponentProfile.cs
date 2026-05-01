@@ -1,4 +1,4 @@
-﻿using Sentinel.Application.DTOs;
+using Sentinel.Application.DTOs;
 using System;
 using System.Collections.Generic;
 using Sentinel.Domain.Entities;
@@ -15,11 +15,7 @@ namespace Sentinel.Application.Mapping
         {
             CreateMap<Component, ComponentDto>()
             // LicenseName (tekil) yerine LicenseNames (liste) eşlemesi yapıyoruz
-            .ForMember(dest => dest.LicenseNames,
-                opt => opt.MapFrom(src =>
-                    src.ComponentLicenses != null && src.ComponentLicenses.Any()
-                        ? src.ComponentLicenses.Select(cl => cl.License.Name).ToList()
-                        : new List<string> { "Unknown" }));
+            .ForMember(dest => dest.LicenseNames, opt => opt.Ignore());
         }
     }
 }
