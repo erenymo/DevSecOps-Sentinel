@@ -29,7 +29,7 @@ namespace Sentinel.Application.Services
                 var latestScan = m.Scans?.OrderByDescending(s => s.ScanDate).FirstOrDefault();
                 int depCount = latestScan?.Components?.Count ?? 0;
                 int vulnCount = latestScan?.Components?.SelectMany(c => c.VexStatements ?? new List<VexStatement>()).Count() ?? 0;
-                return new ModuleResponse(m.Id, m.Name, m.Ecosystem, m.RootPath, m.WorkspaceId, m.CreatedAt, depCount, vulnCount);
+                return new ModuleResponse(m.Id, m.Name, m.Ecosystem, m.RootPath, m.WorkspaceId, m.CreatedAt, depCount, vulnCount, latestScan?.ScanDate);
             }).ToList();
             return BaseResponse<List<ModuleResponse>>.Ok(response);
         }
@@ -49,7 +49,7 @@ namespace Sentinel.Application.Services
             int depCount = latestScan?.Components?.Count ?? 0;
             int vulnCount = latestScan?.Components?.SelectMany(c => c.VexStatements ?? new List<VexStatement>()).Count() ?? 0;
 
-            return BaseResponse<ModuleResponse>.Ok(new ModuleResponse(module.Id, module.Name, module.Ecosystem, module.RootPath, module.WorkspaceId, module.CreatedAt, depCount, vulnCount));
+            return BaseResponse<ModuleResponse>.Ok(new ModuleResponse(module.Id, module.Name, module.Ecosystem, module.RootPath, module.WorkspaceId, module.CreatedAt, depCount, vulnCount, latestScan?.ScanDate));
         }
 
         public async Task<BaseResponse<Guid>> CreateAsync(Guid workspaceId, ModuleRequest request, Guid ownerId)
