@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Sentinel.Application.Abstractions.Validation;
 using System;
 using System.Collections.Generic;
@@ -26,12 +26,21 @@ namespace Sentinel.Infrastructure.Security
                 return ValidationResult.Failure("File is empty.");
 
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var fileName = Path.GetFileName(file.FileName);
 
+            // 1. Öncelik: Dosya adına göre validator seç (aynı uzantıyı birden fazla validator
+            //    desteklediğinde çakışmayı önler, örn: package.json vs project.assets.json)
             var validator = _validators
-                .FirstOrDefault(v => v.SupportedExtension.Contains(extension));
+                .FirstOrDefault(v => v.SupportedFileNames != null
+                    && v.SupportedFileNames.Contains(fileName));
+
+            // 2. Fallback: Dosya adı eşleşmezse uzantıya göre seç
+            validator ??= _validators
+                .FirstOrDefault(v => (v.SupportedFileNames == null || v.SupportedFileNames.Count == 0)
+                    && v.SupportedExtension.Contains(extension));
 
             if (validator is null)
-                return ValidationResult.Failure("Unsupported file extension.");
+                return ValidationResult.Failure("Unsupported file type.");
 
             if (file.Length > MaxFileSize)
                 return ValidationResult.Failure("File size exceeds 5MB limit.");

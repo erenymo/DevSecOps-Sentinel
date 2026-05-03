@@ -1,4 +1,4 @@
-﻿using Sentinel.Application.Abstractions.Validation;
+using Sentinel.Application.Abstractions.Validation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +13,7 @@ namespace Sentinel.Infrastructure.Security.Validators
     {
         public string Ecosystem => "NuGet";
         public HashSet<string> SupportedExtension => new() { ".csproj", ".json" };
+        public HashSet<string>? SupportedFileNames => new(StringComparer.OrdinalIgnoreCase) { "project.assets.json" };
 
         public async Task<ValidationResult> ValidateAsync(Stream stream, CancellationToken ct)
         {

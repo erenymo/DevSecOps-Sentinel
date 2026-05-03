@@ -38,13 +38,20 @@ namespace Sentinel.Api.Controllers
 
             // --- 2. VALIDATOR BUL ---
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var fileName = Path.GetFileName(file.FileName);
 
+            // Öncelik: Dosya adına göre validator seç (aynı uzantı çakışmalarını önler)
             var validator = _validators
-                .FirstOrDefault(v => v.SupportedExtension
-                    .Contains(extension, StringComparer.OrdinalIgnoreCase));
+                .FirstOrDefault(v => v.SupportedFileNames != null
+                    && v.SupportedFileNames.Contains(fileName));
+
+            // Fallback: Dosya adı eşleşmezse uzantıya göre seç
+            validator ??= _validators
+                .FirstOrDefault(v => (v.SupportedFileNames == null || v.SupportedFileNames.Count == 0)
+                    && v.SupportedExtension.Contains(extension, StringComparer.OrdinalIgnoreCase));
 
             if (validator is null)
-                return BadRequest(BaseResponse<object>.Fail($"No validator found for extension: {extension}"));
+                return BadRequest(BaseResponse<object>.Fail($"No validator found for file: {fileName}"));
 
             // 🔥 3. ECOSYSTEM (string)
             var ecosystem = validator.Ecosystem;

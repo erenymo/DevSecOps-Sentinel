@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Sentinel.Application.Abstractions;
 using Sentinel.Domain.Entities;
+using System.Collections.Concurrent;
 
 namespace Sentinel.Infrastructure.DepsDev
 {
@@ -63,6 +64,12 @@ namespace Sentinel.Infrastructure.DepsDev
             _logger.LogInformation("LicenseEnrichmentBackgroundService durduruluyor.");
         }
 
+        /// <summary>
+        /// Lisans API çağrı sonuçlarını taşıyan DTO.
+        /// API çağrıları paralel yapılır, sonuçlar bu yapıda toplanır.
+        /// </summary>
+        private record LicenseFetchResult(string Purl, List<string> LicenseNames);
+
         private async Task ProcessScanAsync(Guid scanId, CancellationToken cancellationToken)
         {
             using var scope = _scopeFactory.CreateScope();
@@ -95,20 +102,34 @@ namespace Sentinel.Infrastructure.DepsDev
 
             _logger.LogInformation("ScanId={ScanId}: {Count} farklı PURL lisans zenginleştirmesi bekliyor.", scanId, toProcessPurls.Count);
 
-            // 4. Mevcut lisansları DB'den çekip in-memory cache'e al (deduplication)
-            var existingLicenses = await unitOfWork.Licenses.GetAllAsync();
-            var licenseCache = new System.Collections.Concurrent.ConcurrentDictionary<string, License>(
-                existingLicenses.ToDictionary(l => l.Name, l => l, StringComparer.OrdinalIgnoreCase));
+            // ═══════════════════════════════════════════════════════════════════
+            // AŞAMA 1: API çağrılarını paralel yap, sonuçları thread-safe koleksiyonda topla
+            // (DbContext'e bu aşamada DOKUNMA — thread-safe değil!)
+            // ═══════════════════════════════════════════════════════════════════
+            var fetchResults = new ConcurrentBag<LicenseFetchResult>();
 
-            // 5. Semaphore ile kontrollü paralel işlem
             using var semaphore = new SemaphoreSlim(MaxDegreeOfParallelism);
             var tasks = toProcessPurls.Select(async purl =>
             {
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    await EnrichPurlAsync(purl, unitOfWork, depsDevClient, licenseCache, cancellationToken);
+                    var licenseNames = await depsDevClient.GetLicensesAsync(purl, cancellationToken);
+
+                    if (licenseNames.Any())
+                    {
+                        fetchResults.Add(new LicenseFetchResult(purl, licenseNames.ToList()));
+                    }
+                    else
+                    {
+                        _logger.LogDebug("Lisans bulunamadı: {Purl}", purl);
+                    }
+
                     await Task.Delay(RequestDelay, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "PURL lisans zenginleştirme API hatası: {Purl}", purl);
                 }
                 finally
                 {
@@ -118,58 +139,48 @@ namespace Sentinel.Infrastructure.DepsDev
 
             await Task.WhenAll(tasks);
 
-            // 6. Tüm değişiklikleri tek seferde kaydet
-            await unitOfWork.SaveChangesAsync();
-        }
+            // ═══════════════════════════════════════════════════════════════════
+            // AŞAMA 2: Sonuçları SIRAYLA (tek thread) DbContext'e yaz
+            // Bu sayede concurrent DbContext erişimi ve Dictionary corruption hatası önlenir.
+            // ═══════════════════════════════════════════════════════════════════
 
-        private async Task EnrichPurlAsync(
-            string purl,
-            IUnitOfWork unitOfWork,
-            IDepsDevClient depsDevClient,
-            System.Collections.Concurrent.ConcurrentDictionary<string, License> licenseCache,
-            CancellationToken cancellationToken)
-        {
-            try
+            // Mevcut lisansları DB'den çekip in-memory cache'e al (deduplication)
+            var existingLicenses = await unitOfWork.Licenses.GetAllAsync();
+            var licenseCache = existingLicenses
+                .ToDictionary(l => l.Name, l => l, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var result in fetchResults)
             {
-                var licenseNames = await depsDevClient.GetLicensesAsync(purl, cancellationToken);
-
-                if (!licenseNames.Any())
+                foreach (var licenseName in result.LicenseNames)
                 {
-                    _logger.LogDebug("Lisans bulunamadı: {Purl}", purl);
-                    return;
-                }
-
-                foreach (var licenseName in licenseNames)
-                {
-                    // ConcurrentDictionary ile deduplication: aynı isimde lisans sadece 1 kez oluşturulur
-                    var license = licenseCache.GetOrAdd(licenseName, name =>
+                    // Cache'den bak veya yeni oluştur (tek thread — güvenli)
+                    if (!licenseCache.TryGetValue(licenseName, out var license))
                     {
-                        var newLicense = new License
+                        license = new License
                         {
-                            Name = name,
-                            Type = ClassifyLicenseType(name),
-                            RiskLevel = ClassifyRiskLevel(name)
+                            Name = licenseName,
+                            Type = ClassifyLicenseType(licenseName),
+                            RiskLevel = ClassifyRiskLevel(licenseName)
                         };
-                        unitOfWork.Licenses.AddAsync(newLicense).GetAwaiter().GetResult();
-                        return newLicense;
-                    });
+                        await unitOfWork.Licenses.AddAsync(license);
+                        licenseCache[licenseName] = license; // Cache'e ekle → duplicate önle
+                    }
 
                     // PackageLicense ilişkisini oluştur
                     var packageLicense = new PackageLicense
                     {
-                        Purl = purl,
+                        Purl = result.Purl,
                         LicenseId = license.Id
                     };
                     await unitOfWork.PackageLicenses.AddAsync(packageLicense);
                 }
 
                 _logger.LogDebug("Lisans eşleştirildi: {Purl} → [{Licenses}]",
-                    purl, string.Join(", ", licenseNames));
+                    result.Purl, string.Join(", ", result.LicenseNames));
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "PURL lisans zenginleştirme hatası: {Purl}", purl);
-            }
+
+            // 6. Tüm değişiklikleri tek seferde kaydet
+            await unitOfWork.SaveChangesAsync();
         }
 
         /// <summary>
